@@ -7,6 +7,7 @@ The goal of the project is to test some algorithmical solutions as well as a mac
 
 # Installation
 - Clone the repository
+- Install termcolor with sudo pip install termcolor or sudo easy_installtermcolor if you want colored display
 - python smartmine.py
 
 # Use
