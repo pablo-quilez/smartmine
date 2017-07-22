@@ -18,6 +18,8 @@
 
 import itertools, operator, random, copy, time, sys
 
+debug = 0 # 0 for no extra info, 1 for some info, 2 for much more info
+
 # This class contains the board information
 # According to the rules, no mine can be set at the beginning position
 # At least there must be a possible free square
@@ -50,40 +52,52 @@ class grid:
 		return self.mark(x,y)
 	def mark(self,x,y):
 
-		assert self.index(x,y) not in self.marked
+		to_mark = set()
+		to_mark.add((x,y))
 
-		# We generate the board after the first click
-		if not self.marked:
-			# The first clicked square must be free, also the surrounding, if possible, until complete max mines
-			p = range(self.width*self.height)
-			p.remove(self.index(x,y)) # Remove the first square from the possibilites
-			s = self.surrounding_tiles_i(self.index(x,y))
+		while to_mark:
 
-			surrounding_free_squares = self.width * self.height - 1 - self.max_mines
-			if surrounding_free_squares > 9 : surrounding_free_squares = 9
+			current = to_mark.pop()
+			x = current[0]
+			y = current[1]
 
-			for z in range(surrounding_free_squares):
-				if s:
-					r = random.choice(s)
-					s.remove(r)
-					p.remove(r)
+			assert self.index(x,y) not in self.marked
 
-			self.mines = set(random.sample(p, self.max_mines)) # Mine positions saved as a set
+			# We generate the board after the first click
+			if not self.marked:
 
-		if self.is_mine(x,y):
-			return 1
-		else:
-			self.marked.add(self.index(x,y))
-			if len(self.marked) + len(self.mines) == self.width * self.height:
-				return 2
+				# The first clicked square must be free, also the surrounding, if possible, until complete max mines
+				p = range(self.width*self.height)
+				p.remove(self.index(x,y)) # Remove the first square from the possibilites
+				s = self.surrounding_tiles_i(self.index(x,y))
+
+				surrounding_free_squares = self.width * self.height - 1 - self.max_mines
+				if surrounding_free_squares > 9 : surrounding_free_squares = 9
+
+				for z in range(surrounding_free_squares):
+					if s:
+						r = random.choice(s)
+						s.remove(r)
+						p.remove(r)
+
+				self.mines = set(random.sample(p, self.max_mines)) # Mine positions saved as a set
+
+			if self.is_mine(x,y):
+				return 1
 			else:
-				# Check if no mines are surrounding and mark surrounding tiles therefore
-				if self.mines_surrounding(x,y) == 0:
-					s = self.surrounding_tiles_i(self.index(x,y))
-					for z in s:
-						if z not in self.marked:
-							self.mark_i(z)
-				return 0
+				self.marked.add(self.index(x,y))
+				if len(self.marked) + len(self.mines) == self.width * self.height:
+					return 2
+				else:
+					# Check if no mines are surrounding and mark surrounding tiles therefore
+					if self.mines_surrounding(x,y) == 0:
+						s = self.surrounding_tiles_i(self.index(x,y))
+						for z in s:
+							if z not in self.marked:
+								#self.mark_i(z)
+								to_mark.add((z / self.width, z % self.width))
+
+		return 0
 
 	def surrounding_tiles_i(self,index):
 		x = index / self.width
@@ -464,7 +478,9 @@ except:
 	def colored(x,y):
 		return x
 
+
 if __name__ == '__main__':
+
 	try:
 		w = int(raw_input("Please enter the width of the grid: "))
 		h = int(raw_input("Please enter the height of the grid: "))
@@ -488,6 +504,7 @@ if __name__ == '__main__':
 				b = brute_ai(g)
 				if b.play() : victories += 1
 				print "Victory rate: " + str(victories / float(x + 1)) + " by " + str(x + 1) + " games"
-				time.sleep(1)
-	except:
+				if (debug): time.sleep(1)
+	except Exception as e:
 		print "Something went wrong! Bye!"
+		if (debug): print e
