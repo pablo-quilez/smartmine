@@ -182,6 +182,8 @@ class grid:
 
 # --------------------------------------------------------------------------------------------------------
 # Algorithmical solver
+# TODO: improve guessing based on probabilities
+# TODO: use mines rest information for calculations, specially at the end
 # --------------------------------------------------------------------------------------------------------
 
 class brute_ai:
@@ -198,7 +200,7 @@ class brute_ai:
 		# tile is the current marked square which generates the group of markable tiles surrounding
 		def __init__(self, grid, mines_found, tile):
 			assert tile in grid.marked
-			possibilities_to_mark = grid.surrounding_possibilities_to_mark_i(tile)
+			possibilities_to_mark = grid.surrounding_possibilities_to_mark_i(tile) # Unmarked surrounding
 			self.tiles = set([x for x in possibilities_to_mark if x not in mines_found])
 			self.mines = grid.mines_surrounding_i(tile) - len([x for x in mines_found if x in possibilities_to_mark])
 			assert self.mines <= len(self.tiles)
@@ -227,6 +229,10 @@ class brute_ai:
 			if self.tiles.intersection(group.tiles):
 				return True
 			return False
+		def intersection(self, group):
+			return self.tiles.intersection(group)
+		def difference(self, group):
+			return self.tiles.difference(group)
 		# Overwrite print operators
 		def __str__(self):
 			return str(self.tiles) + "--> " + str(self.mines)
@@ -277,20 +283,28 @@ class brute_ai:
 	# ---------------------------------------------------------------
 	def calculate(self):
 		progress = len(self.safe_to_mark) + len(self.mines_found)
-		self.calculate_simple_case() # Calculate easy determined mines in groups
+		# Calculate easy determined mines in groups
+		# This is covered in calculate_collisions, but calculating
+		# simple cmbinations first speed up the algorithm
+		self.calculate_simple_case()
 		self.calculate_safe_squares()
 		if progress != len(self.safe_to_mark) + len(self.mines_found) : return
-		self.calculate_collisions() # Calculate complex combinations
+		# Calculate complex combinations
+		# Basically we get all possible sorted combinations for each islands
+		# and then we check if the combination determines mines
+		self.calculate_collisions()
 		self.calculate_safe_squares()
 		
 	def calculate_simple_case(self):
-		progress = False
+		#progress = False
 		groups = self.get_groups()
 		for group in groups:
 			if group.is_determined(): # If there are the same number of mines and tiles in the group
 				self.mines_found = self.mines_found.union(group.tiles)
-				progress = True
-		if progress : self.calculate_simple_case()
+				#progress = True
+			if group.mines == 0:
+		   		self.safe_to_mark = self.safe_to_mark.union(group.tiles)
+		#if progress : self.calculate_simple_case()
 
 	def calculate_collisions(self):
 		groups = self.get_groups()
@@ -299,34 +313,46 @@ class brute_ai:
 		progress = len(self.safe_to_mark) + len(self.mines_found)
 		for island in islands:
 
-			if self.debug : print "Calculating all permutations... ",
+			if self.debug : print "Calculating all combinations and sortering... ",
 
-			all_permutations = []
+			all_combinations = []
 			for i in range(1,len(island)+1):
-		   		all_permutations.extend(list(itertools.combinations(island,i)))
+		   		all_combinations.extend(list(itertools.combinations(island,i)))
 
-		   	all_combinations = []
-		   	for i in all_permutations:
-		   		all_combinations.extend(list(itertools.permutations(i)))
+		   	all_sorted_combinations = []
+		   	for i in all_combinations:
+		   		li = list(i)
+		   		li.sort(lambda x,y: cmp(len(x.tiles), len(y.tiles)))
+		   		all_sorted_combinations.append(li)
 
-			if self.debug : print str(len(all_combinations)) + " found"
+			if self.debug : print str(len(all_sorted_combinations)) + " found"
 
 			# TODO: this is the part of the code which have the biggest impact in performance:
 
-		   	for combination in all_combinations:
+		   	for combination in all_sorted_combinations:
 		   		#assert(len(combination) > 0)
+
 		   		combination = list(combination)
 		   		current = combination.pop()
 		   		if not combination:
 		   			if current.is_determined():
 		   				self.mines_found = self.mines_found.union(current.tiles)
+		   			if current.mines == 0:
+		   				self.safe_to_mark = self.safe_to_mark.union(current.tiles)
 		   		else:
 		   			while(combination):
 		   				element = combination.pop()
+
+		   				#if current.intersection(element)
+		   				#if len(element.difference(current)) <= element.mines:
+
 		   				if element.issubset(current):
 		   					current.remove_from_group(element)
 		   					if current.is_determined():
 		   						self.mines_found = self.mines_found.union(current.tiles)
+		   					if current.mines == 0:
+		   						self.safe_to_mark = self.safe_to_mark.union(current.tiles)
+
 
 		   	if progress != len(self.safe_to_mark) + len(self.mines_found) : return
 
@@ -358,7 +384,6 @@ class brute_ai:
 	def play(self):
 		self.grid.printgrid()
 		end = 0
-		self.grid.mark(4,4)
 		while (end == 0):
 			opt, mines_found = self.get_best_option_to_mark()
 
@@ -383,6 +408,10 @@ class brute_ai:
 		for x in self.grid.marked:
 			if x in self.safe_to_mark: self.safe_to_mark.remove(x)
 
+		# First turm, random choice
+		if not self.grid.marked:
+			return random.choice(list(self.grid.unmarked())), self.mines_found
+
 		if self.safe_to_mark:
 			return self.safe_to_mark.pop(), self.mines_found
 		else:
@@ -390,8 +419,6 @@ class brute_ai:
 			while keep_on:
 				progress = len(self.safe_to_mark) + len(self.mines_found)
 				self.calculate()
-				mines_end = len(self.mines_found)
-				safe_end = len(self.safe_to_mark)
 				keep_on = len(self.safe_to_mark) + len(self.mines_found) != progress
 		if self.safe_to_mark:
 			return self.safe_to_mark.pop(), self.mines_found
