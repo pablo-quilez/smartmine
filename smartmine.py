@@ -16,11 +16,7 @@
 
 # A simple minesweeper console game with solver
 
-import itertools
-import random
-import copy
-import operator
-import sys
+import itertools, operator, random, copy, time, sys
 
 # This class contains the board information
 # According to the rules, no mine can be set at the beginning position
@@ -141,7 +137,7 @@ class grid:
 					print colored("X","white"),
 			print ""
 		print "-----------------------"
-		print "Still " + str(self.max_mines - len(mines_found)) + " mines to found from " + str(self.max_mines)
+		print "Still " + str(self.max_mines - len(mines_found)) + " mines to be found from " + str(self.max_mines)
 		print "-----------------------"
 
 	# Returns a set containing unmarked tiles
@@ -491,7 +487,7 @@ if __name__ == '__main__':
 				g = grid(w,h,m)
 				b = brute_ai(g)
 				if b.play() : victories += 1
-
-			print "Victory rate: " + str(victories / float(how_many))
+				print "Victory rate: " + str(victories / float(x + 1)) + " by " + str(x + 1) + " games"
+				time.sleep(1)
 	except:
 		print "Something went wrong! Bye!"
