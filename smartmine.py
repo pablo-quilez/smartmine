@@ -16,7 +16,6 @@
 
 # A simple minesweeper console game with solver
 
-from termcolor import colored
 import itertools
 import random
 import copy
@@ -233,6 +232,10 @@ class brute_ai:
 			return str(self.tiles) + "--> " + str(self.mines)
 		def __repr__(self):
 			return self.__str__()
+		def __hash__(self):
+			return hash((frozenset(self.tiles), self.mines))
+		def __eq__(self, other):
+			return (self.tiles, self.mines) == (other.tiles, other.mines)
 
     # Returns all possible not empty groups as a list of groups
 	def get_groups(self):
@@ -247,7 +250,7 @@ class brute_ai:
 		return groups
 
 	# Returns all groups with are touching another group
-	# TODO: delete duplicates
+	# Duplicates are deleted to speed up calculations
 	def get_islands(self, groups):
 		islands = []
 		for x in groups:
@@ -256,21 +259,27 @@ class brute_ai:
 			for y in groups:
 				if x.touchs(y):
 					island.add(y)
-			islands.append(island)
+			islands.append(frozenset(island))
+		#print len(set(islands)), len(islands)
+		#raw_input("Await")
 		return islands
 
     # ---------------------------------------------------------------
 	# Class entry point
 	# ---------------------------------------------------------------
-	def __init__(self, grid):
+	def __init__(self, grid, debug = False):
 		self.grid = grid
 		self.mines_found = set()
 		self.safe_to_mark = set()
+		self.debug = debug
 	# ---------------------------------------------------------------
 	# Logic
 	# ---------------------------------------------------------------
 	def calculate(self):
+		progress = len(self.safe_to_mark) + len(self.mines_found)
 		self.calculate_simple_case() # Calculate easy determined mines in groups
+		self.calculate_safe_squares()
+		if progress != len(self.safe_to_mark) + len(self.mines_found) : return
 		self.calculate_collisions() # Calculate complex combinations
 		self.calculate_safe_squares()
 		
@@ -287,7 +296,10 @@ class brute_ai:
 		groups = self.get_groups()
 		islands = self.get_islands(groups)
 
+		progress = len(self.safe_to_mark) + len(self.mines_found)
 		for island in islands:
+
+			if self.debug : print "Calculating all permutations... ",
 
 			all_permutations = []
 			for i in range(1,len(island)+1):
@@ -297,9 +309,13 @@ class brute_ai:
 		   	for i in all_permutations:
 		   		all_combinations.extend(list(itertools.permutations(i)))
 
+			if self.debug : print str(len(all_combinations)) + " found"
+
+			# TODO: this is the part of the code which have the biggest impact in performance:
+
 		   	for combination in all_combinations:
-		   		assert(len(combination) > 0)
-		   		combination = set(combination)
+		   		#assert(len(combination) > 0)
+		   		combination = list(combination)
 		   		current = combination.pop()
 		   		if not combination:
 		   			if current.is_determined():
@@ -311,6 +327,8 @@ class brute_ai:
 		   					current.remove_from_group(element)
 		   					if current.is_determined():
 		   						self.mines_found = self.mines_found.union(current.tiles)
+
+		   	if progress != len(self.safe_to_mark) + len(self.mines_found) : return
 
 	def calculate_safe_squares(self):
 		for x in self.get_groups():
@@ -368,14 +386,13 @@ class brute_ai:
 		if self.safe_to_mark:
 			return self.safe_to_mark.pop(), self.mines_found
 		else:
-			progress = True
-			while progress:
-				mines_beginning = len(self.mines_found)
-				safe_beginning = len(self.safe_to_mark)
+			keep_on = True
+			while keep_on:
+				progress = len(self.safe_to_mark) + len(self.mines_found)
 				self.calculate()
 				mines_end = len(self.mines_found)
 				safe_end = len(self.safe_to_mark)
-				progress = (mines_beginning != mines_end) or (safe_beginning != safe_end)
+				keep_on = len(self.safe_to_mark) + len(self.mines_found) != progress
 		if self.safe_to_mark:
 			return self.safe_to_mark.pop(), self.mines_found
 		else:
@@ -417,33 +434,37 @@ class human_game:
 # Main
 # --------------------------------------------------------------------------------------------------------
 
-
-
+# Helper for allowing running on Pypy
+try:
+	from termcolor import colored
+except:
+	def colored(x,y):
+		return x
 
 if __name__ == '__main__':
-	#try:
-	w = int(raw_input("Please enter the width of the grid: "))
-	h = int(raw_input("Please enter the height of the grid: "))
-	m = int(raw_input("Please enter the number of mines: "))
+	try:
+		w = int(raw_input("Please enter the width of the grid: "))
+		h = int(raw_input("Please enter the height of the grid: "))
+		m = int(raw_input("Please enter the number of mines: "))
 
-	print "Type H for human game"
-	print "Type M for computer game"
-	print "Type B for benchmark based on 100 games"
-	who_plays = raw_input("Your selection: ")
+		print "Type H for human game"
+		print "Type M for computer game"
+		print "Type B for benchmark based on 100 games"
+		who_plays = raw_input("Your selection: ").upper()
 
-	if who_plays == "H":
-		g = grid(w,h,m)
-		h = human_game(g)
-		h.play()
-	elif who_plays == "M" or who_plays == "B":
-		victories = 0
-		how_many = 1
-		if who_plays == "B" : how_many = 100
-		for x in range(how_many):
+		if who_plays == "H":
 			g = grid(w,h,m)
-			b = brute_ai(g)
-			if b.play() : victories += 1
+			h = human_game(g)
+			h.play()
+		elif who_plays == "M" or who_plays == "B":
+			victories = 0
+			how_many = 1
+			if who_plays == "B" : how_many = 100
+			for x in range(how_many):
+				g = grid(w,h,m)
+				b = brute_ai(g)
+				if b.play() : victories += 1
 
-		print "Victory rate: " + str(victories / float(how_many))
-	#except:
-	#	print "Something went wrong! Bye!"
+			print "Victory rate: " + str(victories / float(how_many))
+	except:
+		print "Something went wrong! Bye!"
