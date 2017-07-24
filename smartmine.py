@@ -16,7 +16,7 @@
 
 # A simple minesweeper console game with solver
 
-import itertools, operator, random, copy, time, sys
+import itertools, operator, random, copy, time, sys	
 
 debug = 0 # 0 for no extra info, 1 for some info, 2 for much more info
 
@@ -292,18 +292,25 @@ class brute_ai:
 	# Logic
 	# ---------------------------------------------------------------
 	def calculate(self):
-		progress = len(self.safe_to_mark) + len(self.mines_found)
-		# Calculate easy determined mines in groups
-		# This is covered in calculate_collisions, but calculating
-		# simple cmbinations first speed up the algorithm
-		self.calculate_simple_case()
-		self.calculate_safe_squares()
-		if progress != len(self.safe_to_mark) + len(self.mines_found) : return
-		# Calculate complex combinations
-		# Basically we get all possible sorted combinations for each islands
-		# and then we check if the combination determines mines
-		self.calculate_collisions()
-		self.calculate_safe_squares()
+		progress = -1
+		origin = len(self.safe_to_mark) + len(self.mines_found)
+		while (origin != progress):
+			origin = len(self.safe_to_mark) + len(self.mines_found)
+			# Calculate easy determined mines in groups
+			# This is covered in calculate_collisions, but calculating
+			# simple cmbinations first speed up the algorithm
+			self.calculate_simple_case()
+			self.calculate_safe_squares()
+			# Calculate complex combinations
+			# Basically we get all possible sorted combinations for each islands
+			# and then we check if the combination determines mines
+			self.calculate_collisions()
+			self.calculate_safe_squares()
+			progress = len(self.safe_to_mark) + len(self.mines_found)
+		# Speed up, only as last resource:
+		if not self.safe_to_mark:
+			self.calculate_brute_force()
+			self.calculate_safe_squares()
 		
 	def calculate_simple_case(self):
 		#progress = False
@@ -365,6 +372,70 @@ class brute_ai:
 
 
 		   	if progress != len(self.safe_to_mark) + len(self.mines_found) : return
+
+	def calculate_brute_force(self):
+		groups = self.get_groups()
+		frontiers = set() # Frontiers are those unmarked squares touching a marked square and not found as mines
+		for g in groups:
+			for t in g.tiles:
+				frontiers.add(t)
+		combinations = []
+		self.subsets(frontiers, set(), combinations) # Returns all valid combinations
+		if combinations:
+			lengths = [len(x) for x in combinations]
+			max_mines = max(lengths) + len(self.mines_found)
+			min_mines = min(lengths) + len(self.mines_found)
+			assert self.grid.max_mines >= min_mines
+			assert self.grid.max_mines >= max_mines
+			if self.grid.max_mines - min_mines == 0:
+				# We know unmarked not frontiers are safe
+				for x in [y for y in self.grid.unmarked() if (y not in frontiers) and (y not in self.mines_found)]:
+					self.safe_to_mark.add(x)
+			# Those mines who appears in all possible combinations are sure mines:
+			inter = combinations[0]
+			for c in combinations:
+				inter = inter.intersection(c)
+			self.mines_found = self.mines_found.union(inter) 
+			# Safe positions will be calculated later
+
+
+	# Returns true if a given combination of mines is valid
+	def is_valid(self, combination):
+		if len(combination) + len(self.mines_found) > self.grid.max_mines: return False
+		for x in self.grid.marked:
+			mark_possibilities = set(self.grid.surrounding_possibilities_to_mark_i(x))
+			mines_surrounding = mark_possibilities.intersection(self.mines_found.union(combination))
+			if len(mines_surrounding) != self.grid.mines_surrounding_i(x): return False
+		return True
+
+	def it_may_be_ok(self, combination):
+		if len(combination) + len(self.mines_found) > self.grid.max_mines: return False
+		for x in self.grid.marked:
+			mark_possibilities = set(self.grid.surrounding_possibilities_to_mark_i(x))
+			mines_surrounding = mark_possibilities.intersection(self.mines_found.union(combination))
+			if len(mines_surrounding) > self.grid.mines_surrounding_i(x): return False
+		return True
+
+	def subsets(self, rest, combination, combinations):
+		if self.it_may_be_ok(combination):
+			if not rest:
+				if self.is_valid(combination):
+					combinations.append(copy.deepcopy(combination))
+			else:
+				#crest1 = copy.deepcopy(rest)
+				#crest2 = copy.deepcopy(rest)
+				#cc1 = copy.deepcopy(combination)
+				#cc2 = copy.deepcopy(combination)
+				
+				
+				x = rest.pop()
+				combination.add(x)
+				self.subsets(rest, combination, combinations)
+				combination.remove(x)
+				self.subsets(rest, combination, combinations)
+				rest.add(x)
+
+
 
 	def calculate_safe_squares(self):
 		for x in self.get_groups():
@@ -481,30 +552,30 @@ except:
 
 if __name__ == '__main__':
 
-	try:
-		w = int(raw_input("Please enter the width of the grid: "))
-		h = int(raw_input("Please enter the height of the grid: "))
-		m = int(raw_input("Please enter the number of mines: "))
+	#try:
+	w = int(raw_input("Please enter the width of the grid: "))
+	h = int(raw_input("Please enter the height of the grid: "))
+	m = int(raw_input("Please enter the number of mines: "))
 
-		print "Type H for human game"
-		print "Type M for computer game"
-		print "Type B for benchmark based on 100 games"
-		who_plays = raw_input("Your selection: ").upper()
+	print "Type H for human game"
+	print "Type M for computer game"
+	print "Type B for benchmark based on 100 games"
+	who_plays = raw_input("Your selection: ").upper()
 
-		if who_plays == "H":
+	if who_plays == "H":
+		g = grid(w,h,m)
+		h = human_game(g)
+		h.play()
+	elif who_plays == "M" or who_plays == "B":
+		victories = 0
+		how_many = 1
+		if who_plays == "B" : how_many = 100
+		for x in range(how_many):
 			g = grid(w,h,m)
-			h = human_game(g)
-			h.play()
-		elif who_plays == "M" or who_plays == "B":
-			victories = 0
-			how_many = 1
-			if who_plays == "B" : how_many = 100
-			for x in range(how_many):
-				g = grid(w,h,m)
-				b = brute_ai(g)
-				if b.play() : victories += 1
-				print "Victory rate: " + str(victories / float(x + 1)) + " by " + str(x + 1) + " games"
-				if (debug): time.sleep(1)
-	except Exception as e:
-		print "Something went wrong! Bye!"
-		if (debug): print e
+			b = brute_ai(g)
+			if b.play() : victories += 1
+			print "Victory rate: " + str(victories / float(x + 1)) + " by " + str(x + 1) + " games"
+			if (debug): time.sleep(1)
+	#except Exception as e:
+	#	print "Something went wrong! Bye!"
+	#	if (debug): print e
