@@ -1,6 +1,8 @@
 # smartmine
 Playable console minesweeper game programmed in python. The game includes an algorithmical solver.
 
+![Alt text](/screenshots/2017-08-03.png?raw=true "Optional Title")
+
 # Current status
 ## Human game 
 - Human game is working
